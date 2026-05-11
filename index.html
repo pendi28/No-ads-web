@@ -14,7 +14,59 @@ html, body { width: 100%; height: 100%; background: #000; font-family: system-ui
 #player { position: fixed; inset: 0; display: none; background: #000; }
 video { width: 100%; height: 100%; display: block; }
 #err { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: #000; text-align: center; padding: 20px; }
-video::cue { background: rgba(0,0,0,0.8); color: #fff; font-size: 0.9em; }
+
+/* Styling subtitle bawaan browser */
+video::cue {
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  font-size: 1em;
+  font-family: system-ui, sans-serif;
+  text-shadow: 1px 1px 2px #000;
+}
+
+/* Tombol pilih subtitle */
+#sub-selector {
+  position: fixed;
+  bottom: 70px;
+  right: 16px;
+  z-index: 50;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+#sub-toggle {
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+#sub-toggle:hover { background: rgba(255,255,255,0.15); }
+#sub-list {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+#sub-list.open { display: flex; }
+.sub-btn {
+  background: rgba(0,0,0,0.75);
+  color: #ddd;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  transition: background .15s;
+}
+.sub-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.sub-btn.active { border-color: #f5c518; color: #f5c518; }
 </style>
 </head>
 <body>
@@ -26,6 +78,12 @@ video::cue { background: rgba(0,0,0,0.8); color: #fff; font-size: 0.9em; }
 
 <div id="player">
   <video id="v" controls autoplay playsinline crossorigin="anonymous"></video>
+</div>
+
+<!-- Tombol pilih subtitle -->
+<div id="sub-selector">
+  <button id="sub-toggle">CC / Subtitle</button>
+  <div id="sub-list"></div>
 </div>
 
 <div id="err">
@@ -90,8 +148,6 @@ function guessLangFromUrl(url) {
 }
 
 function normalizeSub(sub) {
-  // Sinkron dengan backend Opsi A: { url, lang, label }.
-  // Tetap kompatibel kalau backend lama mengirim file/language.
   const url = sub.url || sub.file || sub.src || sub.link;
   let lang = (sub.lang || sub.language || sub.srclang || sub.languageCode || sub.iso || '').toString().toLowerCase().trim();
   let label = (sub.label || sub.name || sub.title || sub.display || '').toString().trim();
@@ -106,7 +162,6 @@ function normalizeSub(sub) {
     }
   }
   if (!lang) lang = guessLangFromUrl(url) || '';
-
   if (!label) label = LANG_MAP[lang] || (lang ? lang.toUpperCase() : 'Unknown');
   else if (LANG_MAP[lang]) label = LANG_MAP[lang];
 
@@ -127,8 +182,53 @@ async function loadSubtitleAsVtt(url) {
   return URL.createObjectURL(new Blob([text], { type: 'text/vtt' }));
 }
 
+// Render tombol pilih subtitle
+function buildSubSelector(v, subtitleData) {
+  const selector = document.getElementById('sub-selector');
+  const list = document.getElementById('sub-list');
+  const toggle = document.getElementById('sub-toggle');
+
+  if (!subtitleData || subtitleData.length === 0) return;
+
+  selector.style.display = 'flex';
+
+  // Tombol "Nonaktifkan"
+  const offBtn = document.createElement('button');
+  offBtn.className = 'sub-btn';
+  offBtn.textContent = 'Nonaktifkan';
+  offBtn.onclick = () => {
+    for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = 'disabled';
+    list.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+    offBtn.classList.add('active');
+  };
+  list.appendChild(offBtn);
+
+  // Tombol per bahasa
+  for (let i = 0; i < v.textTracks.length; i++) {
+    const track = v.textTracks[i];
+    const btn = document.createElement('button');
+    btn.className = 'sub-btn';
+    btn.textContent = track.label || track.language || `Track ${i + 1}`;
+    btn.dataset.index = i;
+    if (track.mode === 'showing') btn.classList.add('active');
+    btn.onclick = () => {
+      for (let j = 0; j < v.textTracks.length; j++) v.textTracks[j].mode = 'disabled';
+      v.textTracks[i].mode = 'showing';
+      list.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+    list.appendChild(btn);
+  }
+
+  toggle.onclick = () => list.classList.toggle('open');
+  // Tutup bila klik di luar
+  document.addEventListener('click', ev => {
+    if (!selector.contains(ev.target)) list.classList.remove('open');
+  });
+}
+
 async function attachSubtitles(v, subs) {
-  if (!Array.isArray(subs)) return;
+  if (!Array.isArray(subs) || subs.length === 0) return;
   const seen = new Set();
   for (const raw of subs) {
     if (!raw) continue;
@@ -150,6 +250,8 @@ async function attachSubtitles(v, subs) {
       console.warn('Gagal memuat subtitle', sub, err);
     }
   }
+
+  // Aktifkan sesuai bahasa yang dipilih
   setTimeout(() => {
     let activated = false;
     for (let i = 0; i < v.textTracks.length; i++) {
@@ -158,6 +260,9 @@ async function attachSubtitles(v, subs) {
       else { t.mode = 'disabled'; }
     }
     if (!activated && v.textTracks.length > 0) v.textTracks[0].mode = 'showing';
+
+    // Tampilkan UI pilih subtitle
+    buildSubSelector(v, subs);
   }, 800);
 }
 
@@ -185,8 +290,8 @@ function play(videoUrl, subtitleData) {
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      renderTextTracksNatively: false,
-      subtitleDisplay: false
+      renderTextTracksNatively: true,
+      subtitleDisplay: true
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(v);
