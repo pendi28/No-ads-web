@@ -38,24 +38,46 @@ function bootWasm() {
   return bootPromise;
 }
 
-// ── Stream URL resolver ───────────────────────────────────────────────────────
+// ── Stream URL + subtitle resolver ───────────────────────────────────────────
 async function getStream(id, season, episode) {
   await bootWasm();
   const token = globalThis.getAdv(String(id));
   if (!token) throw new Error('getAdv returned null');
 
+  // multiLang=1 agar mendapatkan semua bahasa subtitle
   const apiUrl = season
-    ? `https://vidlink.pro/api/b/tv/${token}/${season}/${episode || 1}?multiLang=0`
-    : `https://vidlink.pro/api/b/movie/${token}?multiLang=0`;
+    ? `https://vidlink.pro/api/b/tv/${token}/${season}/${episode || 1}?multiLang=1`
+    : `https://vidlink.pro/api/b/movie/${token}?multiLang=1`;
 
   const res = await fetch(apiUrl, {
     headers: { Referer: REFERER, Origin: ORIGIN, 'User-Agent': UA }
   });
   if (!res.ok) throw new Error(`vidlink API returned ${res.status}`);
   const data = await res.json();
+
   const playlist = data?.stream?.playlist;
   if (!playlist) throw new Error('No playlist in response');
-  return playlist;
+
+  // Ambil subtitle dari berbagai kemungkinan field respons vidlink
+  const rawSubs =
+    data?.stream?.subtitles ||
+    data?.stream?.tracks ||
+    data?.subtitles ||
+    data?.tracks ||
+    [];
+
+  // Normalisasi ke format { url, lang, label }
+  const subtitles = Array.isArray(rawSubs)
+    ? rawSubs
+        .filter(s => s && (s.url || s.file || s.src || s.link))
+        .map(s => ({
+          url:   s.url   || s.file || s.src  || s.link  || '',
+          lang:  s.lang  || s.language || s.srclang || s.languageCode || s.iso || '',
+          label: s.label || s.name  || s.title || s.display || ''
+        }))
+    : [];
+
+  return { url: playlist, subtitles };
 }
 
 // ── HLS upstream fetcher with redirect support ────────────────────────────────
@@ -94,6 +116,7 @@ module.exports = async function handler(req, res) {
   const q = Object.fromEntries(searchParams);
 
   // Proxy mode: /api?url=...
+  // Digunakan untuk stream HLS maupun file subtitle (VTT/SRT)
   if (q.url) {
     const url = decodeURIComponent(q.url);
     try {
@@ -108,6 +131,7 @@ module.exports = async function handler(req, res) {
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
         return res.end(rewriteM3u8(body, url));
       } else {
+        // Untuk subtitle (VTT/SRT) dan segment video, pipe langsung
         res.setHeader('Content-Type', ct || 'application/octet-stream');
         if (upstream.headers['content-length']) res.setHeader('Content-Length', upstream.headers['content-length']);
         res.statusCode = upstream.statusCode;
@@ -120,7 +144,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // Stream lookup: /api?id=550  or  /api?id=456&s=1&e=2
+  // Stream lookup: /api?id=550  atau  /api?id=456&s=1&e=2
   if (!q.id) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json');
@@ -129,8 +153,8 @@ module.exports = async function handler(req, res) {
 
   res.setHeader('Content-Type', 'application/json');
   try {
-    const url = await getStream(q.id, q.s, q.e);
-    res.end(JSON.stringify({ url }));
+    const { url, subtitles } = await getStream(q.id, q.s, q.e);
+    res.end(JSON.stringify({ url, subtitle: subtitles }));
   } catch (err) {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: err.message }));
