@@ -44,10 +44,9 @@ async function getStream(id, season, episode) {
   const token = globalThis.getAdv(String(id));
   if (!token) throw new Error('getAdv returned null');
 
-  // multiLang=1 agar mendapatkan semua bahasa subtitle
   const apiUrl = season
-    ? `https://vidlink.pro/api/b/tv/${token}/${season}/${episode || 1}?multiLang=1`
-    : `https://vidlink.pro/api/b/movie/${token}?multiLang=1`;
+    ? `https://vidlink.pro/api/b/tv/${token}/${season}/${episode || 1}?multiLang=0`
+    : `https://vidlink.pro/api/b/movie/${token}?multiLang=0`;
 
   const res = await fetch(apiUrl, {
     headers: { Referer: REFERER, Origin: ORIGIN, 'User-Agent': UA }
