@@ -8,127 +8,164 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; background: #000; font-family: system-ui, sans-serif; color: #fff; overflow: hidden; }
+
 #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; z-index: 100; }
 .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,.1); border-top-color: #f5c518; border-radius: 50%; animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
 #player { position: fixed; inset: 0; display: none; background: #000; }
 video { width: 100%; height: 100%; display: block; }
-#err { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: #000; text-align: center; padding: 20px; }
 
-/* Styling subtitle bawaan browser */
 video::cue {
-  background: rgba(0,0,0,0.75);
+  background: rgba(0,0,0,0.8);
   color: #fff;
   font-size: 1em;
   font-family: system-ui, sans-serif;
-  text-shadow: 1px 1px 2px #000;
+  text-shadow: 1px 1px 3px #000;
 }
 
-/* Tombol pilih subtitle */
-#sub-selector {
+#err { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: #000; text-align: center; padding: 20px; }
+
+#cc-btn {
   position: fixed;
-  bottom: 70px;
-  right: 16px;
-  z-index: 50;
+  bottom: 72px;
+  right: 12px;
+  z-index: 60;
   display: none;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-#sub-toggle {
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-}
-#sub-toggle:hover { background: rgba(255,255,255,0.15); }
-#sub-list {
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  align-items: flex-end;
-}
-#sub-list.open { display: flex; }
-.sub-btn {
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 28px;
   background: rgba(0,0,0,0.75);
-  color: #ddd;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.5);
   border-radius: 5px;
-  padding: 5px 12px;
-  font-size: 12px;
   cursor: pointer;
-  white-space: nowrap;
-  backdrop-filter: blur(4px);
-  transition: background .15s;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+  user-select: none;
+  transition: border-color .2s, background .2s;
 }
-.sub-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
-.sub-btn.active { border-color: #f5c518; color: #f5c518; }
+#cc-btn.active { border-color: #f5c518; color: #f5c518; }
+#cc-btn:active { transform: scale(0.95); }
+
+#cc-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  background: #1a1a1a;
+  border-radius: 16px 16px 0 0;
+  padding: 0 0 24px;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+#cc-panel.open { transform: translateY(0); }
+
+#cc-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+#cc-panel-header span { font-size: 15px; font-weight: 600; color: #fff; }
+#cc-close { background: none; border: none; color: #aaa; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px; }
+
+#cc-options { padding: 8px 0; }
+
+.cc-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  cursor: pointer;
+  transition: background .15s;
+  font-size: 14px;
+  color: #ddd;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.cc-option:active { background: rgba(255,255,255,0.06); }
+.cc-option .cc-lang { flex: 1; }
+.cc-option .cc-check {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25);
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.cc-option.active .cc-lang { color: #f5c518; font-weight: 600; }
+.cc-option.active .cc-check { background: #f5c518; border-color: #f5c518; }
+.cc-option.active .cc-check::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #000; }
+
+#cc-overlay { position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,0.5); display: none; }
+#cc-overlay.open { display: block; }
 </style>
 </head>
 <body>
 
 <div id="loader">
   <div class="spinner"></div>
-  <div style="margin-top: 15px; font-size: 14px; color: #94a3b8;">Menyiapkan Player...</div>
+  <div style="margin-top:15px;font-size:14px;color:#94a3b8;">Menyiapkan Player...</div>
 </div>
 
 <div id="player">
   <video id="v" controls autoplay playsinline crossorigin="anonymous"></video>
 </div>
 
-<!-- Tombol pilih subtitle -->
-<div id="sub-selector">
-  <button id="sub-toggle">CC / Subtitle</button>
-  <div id="sub-list"></div>
+<button id="cc-btn" title="Pengaturan Subtitle">CC</button>
+<div id="cc-overlay"></div>
+
+<div id="cc-panel">
+  <div id="cc-panel-header">
+    <span>🎬 Subtitle / CC</span>
+    <button id="cc-close">✕</button>
+  </div>
+  <div id="cc-options"></div>
 </div>
 
 <div id="err">
-  <div style="font-size: 18px; font-weight: bold; color: #fff; margin-bottom: 10px;">Gagal Memuat Konten</div>
-  <div id="err-detail" style="color: #ef4444; font-size: 13px; max-width: 80%;"></div>
+  <div style="font-size:18px;font-weight:bold;color:#fff;margin-bottom:10px;">Gagal Memuat Konten</div>
+  <div id="err-detail" style="color:#ef4444;font-size:13px;max-width:80%;"></div>
 </div>
 
 <script>
 const LANG_MAP = {
-  'id':'Indonesia','in':'Indonesia','ind':'Indonesia','indonesian':'Indonesia',
-  'en':'English','eng':'English','english':'English',
-  'ms':'Melayu','may':'Melayu','malay':'Melayu',
-  'ko':'Korean','kor':'Korean','korean':'Korean',
-  'ja':'Japanese','jpn':'Japanese','japanese':'Japanese',
-  'zh':'Chinese','chi':'Chinese','chinese':'Chinese',
-  'th':'Thai','tha':'Thai','thai':'Thai',
-  'vi':'Vietnamese','vie':'Vietnamese','vietnamese':'Vietnamese',
-  'ar':'Arabic','ara':'Arabic','arabic':'Arabic',
-  'es':'Spanish','spa':'Spanish','spanish':'Spanish',
-  'fr':'French','fra':'French','french':'French',
-  'de':'German','ger':'German','german':'German',
-  'pt':'Portuguese','por':'Portuguese','portuguese':'Portuguese',
-  'ru':'Russian','rus':'Russian','russian':'Russian',
-  'tr':'Turkish','tur':'Turkish','turkish':'Turkish',
-  'hi':'Hindi','hin':'Hindi','hindi':'Hindi',
-  'tl':'Tagalog','tgl':'Tagalog','tagalog':'Tagalog','filipino':'Tagalog'
+  'id':'🇮🇩 Indonesia','in':'🇮🇩 Indonesia','ind':'🇮🇩 Indonesia','indonesian':'🇮🇩 Indonesia',
+  'en':'🇺🇸 English','eng':'🇺🇸 English','english':'🇺🇸 English',
+  'ms':'🇲🇾 Melayu','may':'🇲🇾 Melayu','malay':'🇲🇾 Melayu',
+  'ko':'🇰🇷 Korean','kor':'🇰🇷 Korean','korean':'🇰🇷 Korean',
+  'ja':'🇯🇵 Japanese','jpn':'🇯🇵 Japanese','japanese':'🇯🇵 Japanese',
+  'zh':'🇨🇳 Chinese','chi':'🇨🇳 Chinese','chinese':'🇨🇳 Chinese',
+  'th':'🇹🇭 Thai','tha':'🇹🇭 Thai','thai':'🇹🇭 Thai',
+  'vi':'🇻🇳 Vietnamese','vie':'🇻🇳 Vietnamese','vietnamese':'🇻🇳 Vietnamese',
+  'ar':'🇸🇦 Arabic','ara':'🇸🇦 Arabic','arabic':'🇸🇦 Arabic',
+  'es':'🇪🇸 Spanish','spa':'🇪🇸 Spanish','spanish':'🇪🇸 Spanish',
+  'fr':'🇫🇷 French','fra':'🇫🇷 French','french':'🇫🇷 French',
+  'de':'🇩🇪 German','ger':'🇩🇪 German','german':'🇩🇪 German',
+  'pt':'🇧🇷 Portuguese','por':'🇧🇷 Portuguese','portuguese':'🇧🇷 Portuguese',
+  'ru':'🇷🇺 Russian','rus':'🇷🇺 Russian','russian':'🇷🇺 Russian',
+  'tr':'🇹🇷 Turkish','tur':'🇹🇷 Turkish','turkish':'🇹🇷 Turkish',
+  'hi':'🇮🇳 Hindi','hin':'🇮🇳 Hindi','hindi':'🇮🇳 Hindi',
+  'tl':'🇵🇭 Tagalog','tgl':'🇵🇭 Tagalog','tagalog':'🇵🇭 Tagalog','filipino':'🇵🇭 Tagalog'
 };
 const NAME_TO_CODE = {
   'indonesia':'id','indonesian':'id','ind':'id','in':'id',
-  'english':'en','eng':'en',
-  'melayu':'ms','malay':'ms','may':'ms',
-  'korean':'ko','kor':'ko',
-  'japanese':'ja','jpn':'ja',
-  'chinese':'zh','chi':'zh',
-  'thai':'th','tha':'th',
-  'vietnamese':'vi','vie':'vi',
-  'arabic':'ar','ara':'ar',
-  'spanish':'es','spa':'es',
-  'french':'fr','fra':'fr',
-  'german':'de','ger':'de',
-  'portuguese':'pt','por':'pt',
-  'russian':'ru','rus':'ru',
-  'turkish':'tr','tur':'tr',
-  'hindi':'hi','hin':'hi',
-  'tagalog':'tl','filipino':'tl'
+  'english':'en','eng':'en','melayu':'ms','malay':'ms','may':'ms',
+  'korean':'ko','kor':'ko','japanese':'ja','jpn':'ja',
+  'chinese':'zh','chi':'zh','thai':'th','tha':'th',
+  'vietnamese':'vi','vie':'vi','arabic':'ar','ara':'ar',
+  'spanish':'es','spa':'es','french':'fr','fra':'fr',
+  'german':'de','ger':'de','portuguese':'pt','por':'pt',
+  'russian':'ru','rus':'ru','turkish':'tr','tur':'tr',
+  'hindi':'hi','hin':'hi','tagalog':'tl','filipino':'tl'
 };
 
 const p = new URLSearchParams(location.search);
@@ -151,20 +188,16 @@ function normalizeSub(sub) {
   const url = sub.url || sub.file || sub.src || sub.link;
   let lang = (sub.lang || sub.language || sub.srclang || sub.languageCode || sub.iso || '').toString().toLowerCase().trim();
   let label = (sub.label || sub.name || sub.title || sub.display || '').toString().trim();
-
   if (lang && NAME_TO_CODE[lang]) lang = NAME_TO_CODE[lang];
   if (!lang && label) {
     const k = label.toLowerCase();
     if (NAME_TO_CODE[k]) lang = NAME_TO_CODE[k];
     else if (LANG_MAP[k]) lang = k;
-    else for (const word of Object.keys(NAME_TO_CODE)) {
-      if (k.includes(word)) { lang = NAME_TO_CODE[word]; break; }
-    }
+    else for (const word of Object.keys(NAME_TO_CODE)) { if (k.includes(word)) { lang = NAME_TO_CODE[word]; break; } }
   }
   if (!lang) lang = guessLangFromUrl(url) || '';
   if (!label) label = LANG_MAP[lang] || (lang ? lang.toUpperCase() : 'Unknown');
   else if (LANG_MAP[lang]) label = LANG_MAP[lang];
-
   return { url, lang: lang || 'und', label };
 }
 
@@ -182,53 +215,69 @@ async function loadSubtitleAsVtt(url) {
   return URL.createObjectURL(new Blob([text], { type: 'text/vtt' }));
 }
 
-// Render tombol pilih subtitle
-function buildSubSelector(v, subtitleData) {
-  const selector = document.getElementById('sub-selector');
-  const list = document.getElementById('sub-list');
-  const toggle = document.getElementById('sub-toggle');
+const ccBtn     = document.getElementById('cc-btn');
+const ccPanel   = document.getElementById('cc-panel');
+const ccOverlay = document.getElementById('cc-overlay');
+const ccClose   = document.getElementById('cc-close');
+const ccOptions = document.getElementById('cc-options');
 
-  if (!subtitleData || subtitleData.length === 0) return;
+function openPanel()  { ccPanel.classList.add('open');    ccOverlay.classList.add('open'); }
+function closePanel() { ccPanel.classList.remove('open'); ccOverlay.classList.remove('open'); }
 
-  selector.style.display = 'flex';
+ccBtn.addEventListener('click', openPanel);
+ccClose.addEventListener('click', closePanel);
+ccOverlay.addEventListener('click', closePanel);
 
-  // Tombol "Nonaktifkan"
+function setActiveTrack(index) {
+  const v = document.getElementById('v');
+  for (let i = 0; i < v.textTracks.length; i++)
+    v.textTracks[i].mode = (i === index) ? 'showing' : 'disabled';
+  ccOptions.querySelectorAll('.cc-option').forEach((btn, i) =>
+    btn.classList.toggle('active', i === index + 1));
+  if (index === -1) { ccBtn.classList.remove('active'); ccBtn.style.opacity = '0.5'; }
+  else              { ccBtn.classList.add('active');    ccBtn.style.opacity = '1'; }
+  closePanel();
+}
+
+function buildCCPanel(v, subs) {
+  ccOptions.innerHTML = '';
   const offBtn = document.createElement('button');
-  offBtn.className = 'sub-btn';
-  offBtn.textContent = 'Nonaktifkan';
-  offBtn.onclick = () => {
-    for (let i = 0; i < v.textTracks.length; i++) v.textTracks[i].mode = 'disabled';
-    list.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
-    offBtn.classList.add('active');
-  };
-  list.appendChild(offBtn);
+  offBtn.className = 'cc-option';
+  offBtn.innerHTML = `<span class="cc-lang">Nonaktifkan</span><span class="cc-check"></span>`;
+  offBtn.onclick = () => setActiveTrack(-1);
+  ccOptions.appendChild(offBtn);
 
-  // Tombol per bahasa
+  if (!subs || subs.length === 0) {
+    const noSub = document.createElement('div');
+    noSub.style.cssText = 'padding:16px 20px;color:#666;font-size:13px;';
+    noSub.textContent = 'Tidak ada subtitle tersedia untuk konten ini.';
+    ccOptions.appendChild(noSub);
+    return;
+  }
+
   for (let i = 0; i < v.textTracks.length; i++) {
     const track = v.textTracks[i];
     const btn = document.createElement('button');
-    btn.className = 'sub-btn';
-    btn.textContent = track.label || track.language || `Track ${i + 1}`;
-    btn.dataset.index = i;
-    if (track.mode === 'showing') btn.classList.add('active');
-    btn.onclick = () => {
-      for (let j = 0; j < v.textTracks.length; j++) v.textTracks[j].mode = 'disabled';
-      v.textTracks[i].mode = 'showing';
-      list.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    };
-    list.appendChild(btn);
+    btn.className = 'cc-option' + (track.mode === 'showing' ? ' active' : '');
+    btn.innerHTML = `<span class="cc-lang">${track.label || track.language || 'Track '+(i+1)}</span><span class="cc-check"></span>`;
+    btn.onclick = () => setActiveTrack(i);
+    ccOptions.appendChild(btn);
   }
 
-  toggle.onclick = () => list.classList.toggle('open');
-  // Tutup bila klik di luar
-  document.addEventListener('click', ev => {
-    if (!selector.contains(ev.target)) list.classList.remove('open');
-  });
+  const activeIdx = [...v.textTracks].findIndex(t => t.mode === 'showing');
+  ccOptions.querySelectorAll('.cc-option').forEach((btn, i) =>
+    btn.classList.toggle('active', i === activeIdx + 1));
 }
 
 async function attachSubtitles(v, subs) {
-  if (!Array.isArray(subs) || subs.length === 0) return;
+  ccBtn.style.display = 'flex';
+  ccBtn.style.opacity = '0.5';
+
+  if (!Array.isArray(subs) || subs.length === 0) {
+    buildCCPanel(v, []);
+    return;
+  }
+
   const seen = new Set();
   for (const raw of subs) {
     if (!raw) continue;
@@ -246,23 +295,19 @@ async function attachSubtitles(v, subs) {
       track.src = vttUrl;
       if (sub.lang === subLang) track.default = true;
       v.appendChild(track);
-    } catch (err) {
-      console.warn('Gagal memuat subtitle', sub, err);
-    }
+    } catch (err) { console.warn('Gagal memuat subtitle', sub, err); }
   }
 
-  // Aktifkan sesuai bahasa yang dipilih
   setTimeout(() => {
     let activated = false;
     for (let i = 0; i < v.textTracks.length; i++) {
       const t = v.textTracks[i];
       if (t.language === subLang && !activated) { t.mode = 'showing'; activated = true; }
-      else { t.mode = 'disabled'; }
+      else t.mode = 'disabled';
     }
     if (!activated && v.textTracks.length > 0) v.textTracks[0].mode = 'showing';
-
-    // Tampilkan UI pilih subtitle
-    buildSubSelector(v, subs);
+    buildCCPanel(v, subs);
+    if (v.textTracks.length > 0) { ccBtn.classList.add('active'); ccBtn.style.opacity = '1'; }
   }, 800);
 }
 
@@ -272,7 +317,7 @@ if (id) {
     .then(r => r.json())
     .then(data => {
       if (data.error) throw new Error(data.error);
-      if (!data.url) throw new Error("Link stream tidak ditemukan");
+      if (!data.url) throw new Error('Link stream tidak ditemukan');
       play(data.url, data.subtitle);
     })
     .catch(err => {
@@ -285,14 +330,8 @@ if (id) {
 function play(videoUrl, subtitleData) {
   const v = document.getElementById('v');
   const streamUrl = '/api?url=' + encodeURIComponent(videoUrl);
-
   if (Hls.isSupported()) {
-    const hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: true,
-      renderTextTracksNatively: true,
-      subtitleDisplay: true
-    });
+    const hls = new Hls({ enableWorker:true, lowLatencyMode:true, renderTextTracksNatively:true, subtitleDisplay:true });
     hls.loadSource(streamUrl);
     hls.attachMedia(v);
     hls.on(Hls.Events.MANIFEST_PARSED, async () => {
@@ -301,9 +340,7 @@ function play(videoUrl, subtitleData) {
       await attachSubtitles(v, subtitleData);
       v.play().catch(() => {});
     });
-    hls.on(Hls.Events.ERROR, (event, data) => {
-      if (data.fatal) console.error("HLS Fatal Error:", data.details);
-    });
+    hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) console.error('HLS Fatal:', d.details); });
   } else {
     v.src = streamUrl;
     v.oncanplay = () => {
