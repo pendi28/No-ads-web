@@ -4,12 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const AdmZip = require('adm-zip');
 
 const REFERER = 'https://vidlink.pro/';
 const ORIGIN  = 'https://vidlink.pro';
 const UA      = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124';
 
-// SubDL language code mapping (SubDL pakai kode berbeda dari ISO 639-1)
 const SUBDL_LANG_MAP = {
   id: 'IN', in: 'IN', ind: 'IN',
   en: 'EN', eng: 'EN',
@@ -63,12 +63,58 @@ function bootWasm() {
   return bootPromise;
 }
 
+// ── Download buffer dari URL (dengan redirect) ────────────────────────────────
+function downloadBuffer(url, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirects > 5) return reject(new Error('too many redirects'));
+    (url.startsWith('https') ? https : http).get(url, {
+      headers: { 'User-Agent': UA, Accept: '*/*' }
+    }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        const loc = res.headers.location;
+        return resolve(downloadBuffer(loc.startsWith('http') ? loc : new URL(loc, url).href, redirects + 1));
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve({ buf: Buffer.concat(chunks), status: res.statusCode, ct: res.headers['content-type'] || '' }));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+// ── Ekstrak subtitle dari zip SubDL ──────────────────────────────────────────
+async function extractSubtitleFromZip(zipUrl) {
+  try {
+    const { buf, status } = await downloadBuffer(zipUrl);
+    if (status !== 200) return null;
+
+    const zip = new AdmZip(buf);
+    const entries = zip.getEntries();
+
+    // Cari file .srt atau .vtt di dalam zip
+    const subEntry = entries.find(e => /\.(srt|vtt)$/i.test(e.entryName) && !e.isDirectory);
+    if (!subEntry) return null;
+
+    let text = subEntry.getData().toString('utf8');
+
+    // Konversi SRT ke VTT jika perlu
+    if (!/^\uFEFF?WEBVTT/.test(text)) {
+      text = text.replace(/^\uFEFF/, '').replace(/\r+/g, '');
+      text = text.replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2');
+      text = 'WEBVTT\n\n' + text.trim() + '\n';
+    }
+
+    return text;
+  } catch {
+    return null;
+  }
+}
+
 // ── SubDL: ambil subtitle berdasarkan TMDB ID ─────────────────────────────────
 async function getSubtitlesFromSubDL(tmdbId, season, episode, preferLang) {
   const apiKey = process.env.SUBDL_API_KEY;
   if (!apiKey) return [];
 
-  // Tentukan bahasa yang diminta (default Indonesia + English)
   const subdlLang = SUBDL_LANG_MAP[preferLang] || 'IN';
   const langParam = subdlLang === 'EN' ? 'EN' : `${subdlLang},EN`;
 
@@ -80,12 +126,11 @@ async function getSubtitlesFromSubDL(tmdbId, season, episode, preferLang) {
   }
 
   try {
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
+    const { buf } = await downloadBuffer(url);
+    const data = JSON.parse(buf.toString('utf8'));
     if (!data.status || !Array.isArray(data.subtitles)) return [];
 
-    // Deduplikasi per bahasa, ambil 1 terbaik per bahasa
+    // Deduplikasi per bahasa, ambil 1 per bahasa
     const seen = new Set();
     const result = [];
     for (const sub of data.subtitles) {
@@ -94,10 +139,13 @@ async function getSubtitlesFromSubDL(tmdbId, season, episode, preferLang) {
       if (seen.has(code)) continue;
       seen.add(code);
       const isoLang = Object.keys(SUBDL_LANG_MAP).find(k => SUBDL_LANG_MAP[k] === code) || code.toLowerCase();
+
+      // Simpan URL zip asli — akan diproses saat di-proxy
       result.push({
         url: 'https://dl.subdl.com' + sub.url,
         lang: isoLang,
-        label: SUBDL_DISPLAY[code] || sub.lang || code
+        label: SUBDL_DISPLAY[code] || sub.lang || code,
+        isZip: true
       });
     }
     return result;
@@ -125,7 +173,6 @@ async function getStream(id, season, episode, preferLang) {
   const playlist = data?.stream?.playlist;
   if (!playlist) throw new Error('No playlist in response');
 
-  // Coba ambil subtitle dari respons vidlink dulu
   const rawSubs =
     data?.stream?.subtitles ||
     data?.stream?.tracks ||
@@ -151,7 +198,7 @@ async function getStream(id, season, episode, preferLang) {
   return { url: playlist, subtitles };
 }
 
-// ── HLS upstream fetcher with redirect support ────────────────────────────────
+// ── HLS upstream fetcher dengan redirect ─────────────────────────────────────
 function fetchUpstream(url, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 5) return reject(new Error('too many redirects'));
@@ -189,6 +236,21 @@ module.exports = async function handler(req, res) {
   // Proxy mode: /api?url=...
   if (q.url) {
     const url = decodeURIComponent(q.url);
+    const isSubDlZip = url.includes('dl.subdl.com') && url.endsWith('.zip');
+
+    // SubDL zip: ekstrak subtitle langsung dan kembalikan sebagai VTT
+    if (isSubDlZip) {
+      try {
+        const vttText = await extractSubtitleFromZip(url);
+        if (vttText) {
+          res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+          return res.end(vttText);
+        }
+      } catch {}
+      res.statusCode = 502;
+      return res.end('Gagal mengekstrak subtitle');
+    }
+
     try {
       const upstream = await fetchUpstream(url);
       const ct = (upstream.headers['content-type'] || '').toLowerCase();
@@ -213,7 +275,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // Stream lookup: /api?id=550  atau  /api?id=456&s=1&e=2
+  // Stream lookup: /api?id=550 atau /api?id=456&s=1&e=2
   if (!q.id) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json');
