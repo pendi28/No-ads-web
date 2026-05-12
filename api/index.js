@@ -9,8 +9,34 @@ const REFERER = 'https://vidlink.pro/';
 const ORIGIN  = 'https://vidlink.pro';
 const UA      = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124';
 
-// ── WASM singleton (survives warm invocations) ────────────────────────────────
-let wasmReady = false;
+// SubDL language code mapping (SubDL pakai kode berbeda dari ISO 639-1)
+const SUBDL_LANG_MAP = {
+  id: 'IN', in: 'IN', ind: 'IN',
+  en: 'EN', eng: 'EN',
+  ms: 'MS', may: 'MS',
+  ko: 'KO', kor: 'KO',
+  ja: 'JA', jpn: 'JA',
+  zh: 'ZH', chi: 'ZH',
+  ar: 'AR', ara: 'AR',
+  es: 'ES', spa: 'ES',
+  fr: 'FR', fra: 'FR',
+  de: 'DE', ger: 'DE',
+  pt: 'PT', por: 'PT',
+  ru: 'RU', rus: 'RU',
+  tr: 'TR', tur: 'TR',
+  hi: 'HI', hin: 'HI',
+  th: 'TH', tha: 'TH',
+  vi: 'VI', vie: 'VI',
+};
+
+const SUBDL_DISPLAY = {
+  IN: 'Indonesia', EN: 'English', MS: 'Melayu', KO: 'Korean',
+  JA: 'Japanese', ZH: 'Chinese', AR: 'Arabic', ES: 'Spanish',
+  FR: 'French', DE: 'German', PT: 'Portuguese', RU: 'Russian',
+  TR: 'Turkish', HI: 'Hindi', TH: 'Thai', VI: 'Vietnamese',
+};
+
+// ── WASM singleton ────────────────────────────────────────────────────────────
 let bootPromise = null;
 
 function bootWasm() {
@@ -33,13 +59,55 @@ function bootWasm() {
 
     await new Promise(r => setTimeout(r, 500));
     if (typeof globalThis.getAdv !== 'function') throw new Error('getAdv not found after WASM boot');
-    wasmReady = true;
   })();
   return bootPromise;
 }
 
+// ── SubDL: ambil subtitle berdasarkan TMDB ID ─────────────────────────────────
+async function getSubtitlesFromSubDL(tmdbId, season, episode, preferLang) {
+  const apiKey = process.env.SUBDL_API_KEY;
+  if (!apiKey) return [];
+
+  // Tentukan bahasa yang diminta (default Indonesia + English)
+  const subdlLang = SUBDL_LANG_MAP[preferLang] || 'IN';
+  const langParam = subdlLang === 'EN' ? 'EN' : `${subdlLang},EN`;
+
+  let url = `https://api.subdl.com/api/v1/subtitles?api_key=${apiKey}&tmdb_id=${tmdbId}&languages=${langParam}&subs_per_page=5`;
+  if (season) {
+    url += `&season_number=${season}&episode_number=${episode || 1}&type=tv`;
+  } else {
+    url += `&type=movie`;
+  }
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.status || !Array.isArray(data.subtitles)) return [];
+
+    // Deduplikasi per bahasa, ambil 1 terbaik per bahasa
+    const seen = new Set();
+    const result = [];
+    for (const sub of data.subtitles) {
+      if (!sub.url) continue;
+      const code = (sub.lang || '').toUpperCase();
+      if (seen.has(code)) continue;
+      seen.add(code);
+      const isoLang = Object.keys(SUBDL_LANG_MAP).find(k => SUBDL_LANG_MAP[k] === code) || code.toLowerCase();
+      result.push({
+        url: 'https://dl.subdl.com' + sub.url,
+        lang: isoLang,
+        label: SUBDL_DISPLAY[code] || sub.lang || code
+      });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 // ── Stream URL + subtitle resolver ───────────────────────────────────────────
-async function getStream(id, season, episode) {
+async function getStream(id, season, episode, preferLang) {
   await bootWasm();
   const token = globalThis.getAdv(String(id));
   if (!token) throw new Error('getAdv returned null');
@@ -57,7 +125,7 @@ async function getStream(id, season, episode) {
   const playlist = data?.stream?.playlist;
   if (!playlist) throw new Error('No playlist in response');
 
-  // Ambil subtitle dari berbagai kemungkinan field respons vidlink
+  // Coba ambil subtitle dari respons vidlink dulu
   const rawSubs =
     data?.stream?.subtitles ||
     data?.stream?.tracks ||
@@ -65,8 +133,7 @@ async function getStream(id, season, episode) {
     data?.tracks ||
     [];
 
-  // Normalisasi ke format { url, lang, label }
-  const subtitles = Array.isArray(rawSubs)
+  let subtitles = Array.isArray(rawSubs)
     ? rawSubs
         .filter(s => s && (s.url || s.file || s.src || s.link))
         .map(s => ({
@@ -75,6 +142,11 @@ async function getStream(id, season, episode) {
           label: s.label || s.name  || s.title || s.display || ''
         }))
     : [];
+
+  // Fallback ke SubDL jika vidlink tidak punya subtitle
+  if (subtitles.length === 0) {
+    subtitles = await getSubtitlesFromSubDL(id, season, episode, preferLang);
+  }
 
   return { url: playlist, subtitles };
 }
@@ -115,7 +187,6 @@ module.exports = async function handler(req, res) {
   const q = Object.fromEntries(searchParams);
 
   // Proxy mode: /api?url=...
-  // Digunakan untuk stream HLS maupun file subtitle (VTT/SRT)
   if (q.url) {
     const url = decodeURIComponent(q.url);
     try {
@@ -130,7 +201,6 @@ module.exports = async function handler(req, res) {
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
         return res.end(rewriteM3u8(body, url));
       } else {
-        // Untuk subtitle (VTT/SRT) dan segment video, pipe langsung
         res.setHeader('Content-Type', ct || 'application/octet-stream');
         if (upstream.headers['content-length']) res.setHeader('Content-Length', upstream.headers['content-length']);
         res.statusCode = upstream.statusCode;
@@ -152,7 +222,8 @@ module.exports = async function handler(req, res) {
 
   res.setHeader('Content-Type', 'application/json');
   try {
-    const { url, subtitles } = await getStream(q.id, q.s, q.e);
+    const preferLang = (q.ds_lang || 'id').toLowerCase();
+    const { url, subtitles } = await getStream(q.id, q.s, q.e, preferLang);
     res.end(JSON.stringify({ url, subtitle: subtitles }));
   } catch (err) {
     res.statusCode = 500;
