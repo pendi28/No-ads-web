@@ -12,6 +12,7 @@ html, body { width: 100%; height: 100%; background: #000; font-family: system-ui
 #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; z-index: 100; }
 .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,.1); border-top-color: #f5c518; border-radius: 50%; animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+#loader-text { margin-top: 15px; font-size: 14px; color: #94a3b8; }
 
 #player { position: fixed; inset: 0; display: none; background: #000; }
 video { width: 100%; height: 100%; display: block; }
@@ -24,87 +25,68 @@ video::cue {
   text-shadow: 1px 1px 3px #000;
 }
 
-#err { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: #000; text-align: center; padding: 20px; }
+#err {
+  position: fixed; inset: 0; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  background: #000; text-align: center; padding: 20px; gap: 12px;
+}
+#err-icon { font-size: 40px; }
+#err-title { font-size: 17px; font-weight: bold; color: #fff; }
+#err-detail { color: #ef4444; font-size: 13px; max-width: 85%; line-height: 1.5; }
+#err-retry {
+  margin-top: 8px;
+  background: #f5c518; color: #000;
+  border: none; border-radius: 8px;
+  padding: 10px 28px; font-size: 14px;
+  font-weight: 700; cursor: pointer;
+}
+#err-retry:active { opacity: 0.8; }
 
 #cc-btn {
-  position: fixed;
-  bottom: 72px;
-  right: 12px;
-  z-index: 60;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 28px;
+  position: fixed; bottom: 72px; right: 12px; z-index: 60;
+  display: none; align-items: center; justify-content: center;
+  width: 44px; height: 28px;
   background: rgba(0,0,0,0.75);
   border: 2px solid rgba(255,255,255,0.5);
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #fff;
-  user-select: none;
-  transition: border-color .2s, background .2s;
+  border-radius: 5px; cursor: pointer;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: #fff;
+  user-select: none; transition: border-color .2s, background .2s;
 }
 #cc-btn.active { border-color: #f5c518; color: #f5c518; }
 #cc-btn:active { transform: scale(0.95); }
 
 #cc-panel {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 70;
-  background: #1a1a1a;
-  border-radius: 16px 16px 0 0;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 70;
+  background: #1a1a1a; border-radius: 16px 16px 0 0;
   padding: 0 0 24px;
   transform: translateY(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
-  max-height: 70vh;
-  overflow-y: auto;
+  max-height: 70vh; overflow-y: auto;
 }
 #cc-panel.open { transform: translateY(0); }
-
 #cc-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 #cc-panel-header span { font-size: 15px; font-weight: 600; color: #fff; }
 #cc-close { background: none; border: none; color: #aaa; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px; }
-
 #cc-options { padding: 8px 0; }
-
 .cc-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  cursor: pointer;
-  transition: background .15s;
-  font-size: 14px;
-  color: #ddd;
-  border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; cursor: pointer; transition: background .15s;
+  font-size: 14px; color: #ddd; border: none; background: none; width: 100%; text-align: left;
 }
 .cc-option:active { background: rgba(255,255,255,0.06); }
 .cc-option .cc-lang { flex: 1; }
 .cc-option .cc-check {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.25);
-  flex-shrink: 0;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
 }
 .cc-option.active .cc-lang { color: #f5c518; font-weight: 600; }
 .cc-option.active .cc-check { background: #f5c518; border-color: #f5c518; }
 .cc-option.active .cc-check::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #000; }
-
 #cc-overlay { position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,0.5); display: none; }
 #cc-overlay.open { display: block; }
 </style>
@@ -113,7 +95,7 @@ video::cue {
 
 <div id="loader">
   <div class="spinner"></div>
-  <div style="margin-top:15px;font-size:14px;color:#94a3b8;">Menyiapkan Player...</div>
+  <div id="loader-text">Menyiapkan Player...</div>
 </div>
 
 <div id="player">
@@ -122,7 +104,6 @@ video::cue {
 
 <button id="cc-btn" title="Pengaturan Subtitle">CC</button>
 <div id="cc-overlay"></div>
-
 <div id="cc-panel">
   <div id="cc-panel-header">
     <span>🎬 Subtitle / CC</span>
@@ -132,8 +113,10 @@ video::cue {
 </div>
 
 <div id="err">
-  <div style="font-size:18px;font-weight:bold;color:#fff;margin-bottom:10px;">Gagal Memuat Konten</div>
-  <div id="err-detail" style="color:#ef4444;font-size:13px;max-width:80%;"></div>
+  <div id="err-icon">⚠️</div>
+  <div id="err-title">Gagal Memuat Konten</div>
+  <div id="err-detail"></div>
+  <button id="err-retry">🔄 Coba Lagi</button>
 </div>
 
 <script>
@@ -171,6 +154,40 @@ const NAME_TO_CODE = {
 const p = new URLSearchParams(location.search);
 const id = p.get('id'), s = p.get('s'), e = p.get('e');
 const subLang = (p.get('ds_lang') || 'id').toLowerCase();
+
+function showLoader(msg) {
+  document.getElementById('loader').style.display = 'flex';
+  document.getElementById('loader-text').textContent = msg || 'Menyiapkan Player...';
+  document.getElementById('err').style.display = 'none';
+  document.getElementById('player').style.display = 'none';
+}
+function showError(msg) {
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('err').style.display = 'flex';
+  document.getElementById('err-detail').textContent = msg;
+}
+
+// ── Fetch dengan retry otomatis ───────────────────────────────────────────────
+async function fetchWithRetry(url, maxRetry = 2) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxRetry; attempt++) {
+    try {
+      if (attempt > 1) {
+        document.getElementById('loader-text').textContent = `Mencoba lagi... (${attempt}/${maxRetry})`;
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      const res = await fetch(url);
+      const text = await res.text();
+      if (!text || text.trim() === '') throw new Error('Server tidak merespons');
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('Respons server tidak valid, coba lagi'); }
+      return data;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
 
 function guessLangFromUrl(url) {
   if (!url) return null;
@@ -215,6 +232,7 @@ async function loadSubtitleAsVtt(url) {
   return URL.createObjectURL(new Blob([text], { type: 'text/vtt' }));
 }
 
+// ── CC Panel ──────────────────────────────────────────────────────────────────
 const ccBtn     = document.getElementById('cc-btn');
 const ccPanel   = document.getElementById('cc-panel');
 const ccOverlay = document.getElementById('cc-overlay');
@@ -246,7 +264,6 @@ function buildCCPanel(v, subs) {
   offBtn.innerHTML = `<span class="cc-lang">Nonaktifkan</span><span class="cc-check"></span>`;
   offBtn.onclick = () => setActiveTrack(-1);
   ccOptions.appendChild(offBtn);
-
   if (!subs || subs.length === 0) {
     const noSub = document.createElement('div');
     noSub.style.cssText = 'padding:16px 20px;color:#666;font-size:13px;';
@@ -254,7 +271,6 @@ function buildCCPanel(v, subs) {
     ccOptions.appendChild(noSub);
     return;
   }
-
   for (let i = 0; i < v.textTracks.length; i++) {
     const track = v.textTracks[i];
     const btn = document.createElement('button');
@@ -263,7 +279,6 @@ function buildCCPanel(v, subs) {
     btn.onclick = () => setActiveTrack(i);
     ccOptions.appendChild(btn);
   }
-
   const activeIdx = [...v.textTracks].findIndex(t => t.mode === 'showing');
   ccOptions.querySelectorAll('.cc-option').forEach((btn, i) =>
     btn.classList.toggle('active', i === activeIdx + 1));
@@ -272,12 +287,7 @@ function buildCCPanel(v, subs) {
 async function attachSubtitles(v, subs) {
   ccBtn.style.display = 'flex';
   ccBtn.style.opacity = '0.5';
-
-  if (!Array.isArray(subs) || subs.length === 0) {
-    buildCCPanel(v, []);
-    return;
-  }
-
+  if (!Array.isArray(subs) || subs.length === 0) { buildCCPanel(v, []); return; }
   const seen = new Set();
   for (const raw of subs) {
     if (!raw) continue;
@@ -289,15 +299,12 @@ async function attachSubtitles(v, subs) {
     try {
       const vttUrl = await loadSubtitleAsVtt(sub.url);
       const track = document.createElement('track');
-      track.kind = 'subtitles';
-      track.label = sub.label;
-      track.srclang = sub.lang;
-      track.src = vttUrl;
+      track.kind = 'subtitles'; track.label = sub.label;
+      track.srclang = sub.lang; track.src = vttUrl;
       if (sub.lang === subLang) track.default = true;
       v.appendChild(track);
     } catch (err) { console.warn('Gagal memuat subtitle', sub, err); }
   }
-
   setTimeout(() => {
     let activated = false;
     for (let i = 0; i < v.textTracks.length; i++) {
@@ -311,21 +318,22 @@ async function attachSubtitles(v, subs) {
   }, 800);
 }
 
-if (id) {
+// ── Load & Play ───────────────────────────────────────────────────────────────
+function loadStream() {
+  if (!id) return;
+  showLoader('Menyiapkan Player...');
   const apiUrl = `/api?id=${id}${s ? '&s='+s+'&e='+(e||'1') : ''}&ds_lang=${subLang}`;
-  fetch(apiUrl)
-    .then(r => r.json())
+  fetchWithRetry(apiUrl, 3)
     .then(data => {
       if (data.error) throw new Error(data.error);
       if (!data.url) throw new Error('Link stream tidak ditemukan');
       play(data.url, data.subtitle);
     })
-    .catch(err => {
-      document.getElementById('loader').style.display = 'none';
-      document.getElementById('err').style.display = 'flex';
-      document.getElementById('err-detail').textContent = err.message;
-    });
+    .catch(err => showError(err.message));
 }
+
+document.getElementById('err-retry').addEventListener('click', loadStream);
+loadStream();
 
 function play(videoUrl, subtitleData) {
   const v = document.getElementById('v');
